@@ -31,6 +31,11 @@ public class ControllerScanner {
 
     private static void registerMethods(MappingRegistry registry, Class<?> clazz, String basePath) {
         for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(framework.annotations.UrlMapping.class)) {
+                framework.annotations.UrlMapping urlMapping = method.getAnnotation(framework.annotations.UrlMapping.class);
+                String path = combinePaths(basePath, urlMapping.value());
+                registry.register(new UrlMapping(path, "GET", clazz, method, framework.annotations.UrlMapping.class.getName()));
+            }
             registerIfPresent(registry, clazz, method, basePath, Get.class, "GET");
             registerIfPresent(registry, clazz, method, basePath, Post.class, "POST");
             registerIfPresent(registry, clazz, method, basePath, Put.class, "PUT");
