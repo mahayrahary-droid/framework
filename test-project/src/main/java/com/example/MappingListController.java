@@ -23,7 +23,7 @@ public class MappingListController {
         html.append("</style></head><body>");
         html.append("<h1>Table de correspondance URL → méthode</h1>");
         html.append("<table><thead><tr>");
-        html.append("<th>HTTP</th><th>URL</th><th>Annotation</th><th>Full-name</th>");
+        html.append("<th>HTTP</th><th>URL</th><th>Annotation</th><th>JSON</th><th>Full-name</th>");
         html.append("</tr></thead><tbody>");
 
         for (UrlMapping mapping : mappings) {
@@ -31,6 +31,7 @@ public class MappingListController {
                 .append("<td>").append(mapping.getHttpMethod()).append("</td>")
                 .append("<td>").append(mapping.getUrl()).append("</td>")
                 .append("<td>").append(mapping.getAnnotationName()).append("</td>")
+            .append("<td>").append(mapping.isJsonResponse()).append("</td>")
                 .append("<td><code>").append(mapping.getFullName()).append("</code></td>")
                 .append("</tr>");
         }
