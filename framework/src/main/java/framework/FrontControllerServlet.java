@@ -64,7 +64,7 @@ public class FrontControllerServlet extends HttpServlet {
 
         try {
             Object result = invoke(mapping, req, resp);
-            processResult(result, req, resp);
+            processResult(mapping, result, req, resp);
         } catch (ReflectiveOperationException e) {
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             Throwable cause = e instanceof InvocationTargetException ite ? ite.getCause() : e;
@@ -86,9 +86,15 @@ public class FrontControllerServlet extends HttpServlet {
         return method.invoke(controller, args);
     }
 
-    private void processResult(Object result, HttpServletRequest req, HttpServletResponse resp)
+    private void processResult(UrlMapping mapping, Object result, HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
         if (result == null) {
+            return;
+        }
+
+        if (mapping.isJsonResponse()) {
+            resp.setContentType("application/json; charset=UTF-8");
+            resp.getWriter().write(JsonSerializer.toJson(result));
             return;
         }
 
