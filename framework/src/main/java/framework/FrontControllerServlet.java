@@ -25,9 +25,13 @@ public class FrontControllerServlet extends HttpServlet {
         }
 
         try {
-            registry = ControllerScanner.scan(packageName, getClass().getClassLoader());
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            if (classLoader == null) {
+                classLoader = getClass().getClassLoader();
+            }
+            registry = ControllerScanner.scan(packageName, classLoader);
             getServletContext().setAttribute(MAPPING_REGISTRY_ATTR, registry);
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException | RuntimeException e) {
             throw new ServletException("Failed to scan controllers in package: " + packageName, e);
         }
     }
@@ -43,6 +47,10 @@ public class FrontControllerServlet extends HttpServlet {
 
         if (path.isEmpty()) {
             path = "/";
+        }
+
+        if (registry == null) {
+            throw new ServletException("Controller mappings are not initialized");
         }
 
         UrlMapping mapping = registry.find(req.getMethod(), path);
