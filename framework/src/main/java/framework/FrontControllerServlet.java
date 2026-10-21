@@ -25,9 +25,13 @@ public class FrontControllerServlet extends HttpServlet {
         }
 
         try {
-            registry = ControllerScanner.scan(packageName, getClass().getClassLoader());
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            if (classLoader == null) {
+                classLoader = getClass().getClassLoader();
+            }
+            registry = ControllerScanner.scan(packageName, classLoader);
             getServletContext().setAttribute(MAPPING_REGISTRY_ATTR, registry);
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException | RuntimeException e) {
             throw new ServletException("Failed to scan controllers in package: " + packageName, e);
         }
     }
@@ -45,6 +49,10 @@ public class FrontControllerServlet extends HttpServlet {
             path = "/";
         }
 
+        if (registry == null) {
+            throw new ServletException("Controller mappings are not initialized");
+        }
+
         UrlMapping mapping = registry.find(req.getMethod(), path);
         resp.setContentType("text/html; charset=UTF-8");
 
@@ -56,7 +64,7 @@ public class FrontControllerServlet extends HttpServlet {
 
         try {
             Object result = invoke(mapping, req, resp);
-            processResult(result, req, resp);
+            processResult(mapping, result, req, resp);
         } catch (ReflectiveOperationException e) {
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             Throwable cause = e instanceof InvocationTargetException ite ? ite.getCause() : e;
@@ -78,9 +86,15 @@ public class FrontControllerServlet extends HttpServlet {
         return method.invoke(controller, args);
     }
 
-    private void processResult(Object result, HttpServletRequest req, HttpServletResponse resp)
+    private void processResult(UrlMapping mapping, Object result, HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
         if (result == null) {
+            return;
+        }
+
+        if (mapping.isJsonResponse()) {
+            resp.setContentType("application/json; charset=UTF-8");
+            resp.getWriter().write(JsonSerializer.toJson(result));
             return;
         }
 
