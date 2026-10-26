@@ -2,6 +2,8 @@ package framework;
 
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
+import jakarta.servlet.http.Part;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 
+@MultipartConfig
 public class FrontControllerServlet extends HttpServlet {
 
     public static final String MAPPING_REGISTRY_ATTR = "mappingRegistry";
@@ -140,6 +143,13 @@ public class FrontControllerServlet extends HttpServlet {
                 args[i] = resp;
             } else if (MappingRegistry.class.isAssignableFrom(type)) {
                 args[i] = registry;
+            } else if (Part.class.isAssignableFrom(type)) {
+                args[i] = resolvePart(resolveParamName(parameters[i]), req);
+            } else if (type == UploadedFile.class) {
+                args[i] = resolveUploadedFile(resolveParamName(parameters[i]), req);
+            } else if (type == byte[].class) {
+                UploadedFile file = resolveUploadedFile(resolveParamName(parameters[i]), req);
+                args[i] = file.getContent();
             } else if (isSimpleType(type)) {
                 String paramName = resolveParamName(parameters[i]);
                 String paramValue = req.getParameter(paramName);
@@ -150,6 +160,23 @@ public class FrontControllerServlet extends HttpServlet {
         }
 
         return args;
+    }
+
+    private Part resolvePart(String fieldName, HttpServletRequest req) throws IOException, ServletException {
+        Part part = req.getPart(fieldName);
+        if (part == null || part.getSubmittedFileName() == null) {
+            throw new IllegalArgumentException("Missing uploaded file: " + fieldName);
+        }
+        return part;
+    }
+
+    private UploadedFile resolveUploadedFile(String fieldName, HttpServletRequest req)
+            throws IOException, ServletException {
+        Part part = resolvePart(fieldName, req);
+        try (var input = part.getInputStream()) {
+            return new UploadedFile(fieldName, part.getSubmittedFileName(), part.getContentType(),
+                    input.readAllBytes());
+        }
     }
 
     private Object bindObject(Class<?> type, String prefix, HttpServletRequest req)
