@@ -12,6 +12,11 @@ public class MappingRegistry {
 
     public void register(UrlMapping mapping) {
         String key = key(mapping.getHttpMethod(), mapping.getUrl());
+        UrlMapping existing = mappings.get(key);
+        if (existing != null && !existing.equals(mapping)) {
+            throw new IllegalStateException(
+                    "Duplicate mapping for " + key + ": " + existing.getFullName() + " and " + mapping.getFullName());
+        }
         mappings.put(key, mapping);
     }
 
@@ -29,6 +34,24 @@ public class MappingRegistry {
     }
 
     private static String key(String httpMethod, String url) {
-        return httpMethod.toUpperCase() + ":" + url;
+        return normalizeMethod(httpMethod) + ":" + normalizeUrl(url);
+    }
+
+    private static String normalizeMethod(String httpMethod) {
+        return httpMethod == null ? "" : httpMethod.trim().toUpperCase();
+    }
+
+    private static String normalizeUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return "/";
+        }
+        String normalized = url.trim();
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
+        }
+        if (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.isEmpty() ? "/" : normalized;
     }
 }

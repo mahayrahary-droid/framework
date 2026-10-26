@@ -7,9 +7,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 public class FrontControllerServlet extends HttpServlet {
 
@@ -48,6 +55,7 @@ public class FrontControllerServlet extends HttpServlet {
         if (path.isEmpty()) {
             path = "/";
         }
+        path = normalizeRequestPath(path);
 
         if (registry == null) {
             throw new ServletException("Controller mappings are not initialized");
@@ -79,10 +87,10 @@ public class FrontControllerServlet extends HttpServlet {
     }
 
     private Object invoke(UrlMapping mapping, HttpServletRequest req, HttpServletResponse resp)
-            throws ReflectiveOperationException {
+            throws ReflectiveOperationException, IOException, ServletException {
         Object controller = mapping.getControllerClass().getDeclaredConstructor().newInstance();
         Method method = mapping.getMethod();
-        Object[] args = resolveArguments(method, req);
+        Object[] args = resolveArguments(method, req, resp);
         return method.invoke(controller, args);
     }
 
@@ -119,7 +127,8 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
-    private Object[] resolveArguments(Method method, HttpServletRequest req) {
+    private Object[] resolveArguments(Method method, HttpServletRequest req, HttpServletResponse resp)
+            throws ReflectiveOperationException, IOException, ServletException {
         Parameter[] parameters = method.getParameters();
         Object[] args = new Object[parameters.length];
 
@@ -128,7 +137,7 @@ public class FrontControllerServlet extends HttpServlet {
             if (HttpServletRequest.class.isAssignableFrom(type)) {
                 args[i] = req;
             } else if (HttpServletResponse.class.isAssignableFrom(type)) {
-                args[i] = null;
+                args[i] = resp;
             } else if (MappingRegistry.class.isAssignableFrom(type)) {
                 args[i] = registry;
             } else if (isSimpleType(type)) {
@@ -136,12 +145,77 @@ public class FrontControllerServlet extends HttpServlet {
                 String paramValue = req.getParameter(paramName);
                 args[i] = convertSimpleType(paramValue, type, paramName);
             } else {
-                throw new IllegalArgumentException("Unsupported parameter type: " + type.getName()
-                        + " for parameter '" + parameters[i].getName() + "'");
+                args[i] = bindObject(type, resolveParamName(parameters[i]), req);
             }
         }
 
         return args;
+    }
+
+    private Object bindObject(Class<?> type, String prefix, HttpServletRequest req)
+            throws ReflectiveOperationException {
+        Constructor<?> constructor = type.getDeclaredConstructor();
+        if (!constructor.canAccess(null)) {
+            constructor.setAccessible(true);
+        }
+        Object target = constructor.newInstance();
+
+        for (Method setter : type.getMethods()) {
+            if (!isSetter(setter)) {
+                continue;
+            }
+            String property = decapitalize(setter.getName().substring(3));
+            String parameterName = prefix == null || prefix.isBlank() ? property : prefix + "." + property;
+            Object value = bindValue(setter.getGenericParameterTypes()[0], setter.getParameterTypes()[0],
+                    parameterName, req);
+            if (value != null) {
+                setter.invoke(target, value);
+            }
+        }
+
+        return target;
+    }
+
+    private Object bindValue(Type genericType, Class<?> type, String parameterName, HttpServletRequest req)
+            throws ReflectiveOperationException {
+        if (isSimpleType(type)) {
+            String value = req.getParameter(parameterName);
+            return value == null ? null : convertSimpleType(value, type, parameterName);
+        }
+
+        if (Collection.class.isAssignableFrom(type)) {
+            if (!(genericType instanceof ParameterizedType parameterizedType)) {
+                throw new IllegalArgumentException("Collection parameter must declare an element type: "
+                        + parameterName);
+            }
+            Type elementType = parameterizedType.getActualTypeArguments()[0];
+            if (!(elementType instanceof Class<?> elementClass)) {
+                throw new IllegalArgumentException("Unsupported collection element type for parameter: "
+                        + parameterName);
+            }
+            String[] values = req.getParameterValues(parameterName);
+            if (values == null) {
+                return null;
+            }
+            List<Object> result = new ArrayList<>();
+            for (String value : values) {
+                result.add(convertSimpleType(value, elementClass, parameterName));
+            }
+            return result;
+        }
+
+        return bindObject(type, parameterName, req);
+    }
+
+    private boolean isSetter(Method method) {
+        return method.getName().startsWith("set")
+                && method.getName().length() > 3
+                && method.getParameterCount() == 1
+                && method.getReturnType() == void.class;
+    }
+
+    private String decapitalize(String value) {
+        return value.substring(0, 1).toLowerCase(Locale.ROOT) + value.substring(1);
     }
 
     private String resolveParamName(Parameter parameter) {
@@ -149,6 +223,20 @@ public class FrontControllerServlet extends HttpServlet {
             return parameter.getAnnotation(framework.annotations.Param.class).value();
         }
         return parameter.getName();
+    }
+
+    private String normalizeRequestPath(String path) {
+        if (path == null || path.isBlank()) {
+            return "/";
+        }
+        String normalized = path.trim();
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
+        }
+        if (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.isEmpty() ? "/" : normalized;
     }
 
     private boolean isSimpleType(Class<?> type) {
