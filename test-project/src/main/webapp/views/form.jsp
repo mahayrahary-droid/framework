@@ -36,5 +36,15 @@
             <button type="submit">Enregistrer l'objet</button>
         </p>
     </form>
+    <h2>Upload de fichier</h2>
+    <form action="${pageContext.request.contextPath}/files/upload" method="post" enctype="multipart/form-data">
+        <p>
+            <label for="file">Fichier :</label>
+            <input type="file" id="file" name="file" required />
+        </p>
+        <p>
+            <button type="submit">Envoyer le fichier</button>
+        </p>
+    </form>
 </body>
 </html>
