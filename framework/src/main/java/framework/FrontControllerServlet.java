@@ -24,8 +24,11 @@ import java.util.Locale;
 public class FrontControllerServlet extends HttpServlet {
 
     public static final String MAPPING_REGISTRY_ATTR = "mappingRegistry";
+    public static final String SESSION_MANAGER_ATTR = "sessionManager";
+    private static final long DEFAULT_SESSION_TIMEOUT_MILLIS = 30 * 60 * 1000L;
 
     private MappingRegistry registry;
+    private SessionManager sessionManager;
 
     @Override
     public void init() throws ServletException {
@@ -40,7 +43,9 @@ public class FrontControllerServlet extends HttpServlet {
                 classLoader = getClass().getClassLoader();
             }
             registry = ControllerScanner.scan(packageName, classLoader);
+            sessionManager = new SessionManager(DEFAULT_SESSION_TIMEOUT_MILLIS);
             getServletContext().setAttribute(MAPPING_REGISTRY_ATTR, registry);
+            getServletContext().setAttribute(SESSION_MANAGER_ATTR, sessionManager);
         } catch (IOException | ClassNotFoundException | RuntimeException e) {
             throw new ServletException("Failed to scan controllers in package: " + packageName, e);
         }
@@ -143,6 +148,8 @@ public class FrontControllerServlet extends HttpServlet {
                 args[i] = resp;
             } else if (MappingRegistry.class.isAssignableFrom(type)) {
                 args[i] = registry;
+            } else if (Session.class.isAssignableFrom(type)) {
+                args[i] = sessionManager.getOrCreate(req, resp);
             } else if (Part.class.isAssignableFrom(type)) {
                 args[i] = resolvePart(resolveParamName(parameters[i]), req);
             } else if (type == UploadedFile.class) {
