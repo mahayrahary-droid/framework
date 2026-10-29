@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import framework.annotations.Authorize;
 
 @MultipartConfig
 public class FrontControllerServlet extends HttpServlet {
@@ -73,6 +74,12 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
+        if (!isAuthorized(mapping, req)) {
+            resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            resp.getWriter().write("403 Forbidden");
+            return;
+        }
+
         try {
             Object result = invoke(mapping, req, resp);
             processResult(mapping, result, req, resp);
@@ -95,6 +102,26 @@ public class FrontControllerServlet extends HttpServlet {
         Method method = mapping.getMethod();
         Object[] args = resolveArguments(method, req, resp);
         return method.invoke(controller, args);
+    }
+
+    private boolean isAuthorized(UrlMapping mapping, HttpServletRequest req) {
+        Authorize authorization = mapping.getMethod().getAnnotation(Authorize.class);
+        if (authorization == null) {
+            authorization = mapping.getControllerClass().getAnnotation(Authorize.class);
+        }
+        if (authorization == null) {
+            return true;
+        }
+
+        for (String role : authorization.value()) {
+            if (role == null || role.isBlank()) {
+                throw new IllegalStateException("Authorization role cannot be blank");
+            }
+            if (req.isUserInRole(role)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void processResult(UrlMapping mapping, Object result, HttpServletRequest req, HttpServletResponse resp)
