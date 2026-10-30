@@ -23,4 +23,29 @@ public class EmpController {
         mv.addObject("employees", java.util.List.of(name));
         return mv;
     }
+
+    @framework.annotations.Get("/emp/add")
+    public ModelView addForm() {
+        ModelView mv = new ModelView("/views/form.jsp");
+        mv.addObject("title", "Ajouter un employé");
+        return mv;
+    }
+
+    @framework.annotations.Post("/emp/save")
+    public String save(String nom, int age, String email) {
+        return "<h1>Employé enregistré</h1>"
+                + "<ul>"
+                + "<li>Nom : " + nom + "</li>"
+                + "<li>Âge : " + age + "</li>"
+                + "<li>Email : " + email + "</li>"
+                + "</ul>"
+                + "<a href=\"add\">Nouvel ajout</a>";
+    }
+
+    @framework.annotations.Post("/emp/save-personne")
+    public String savePersonne(Personne personne) {
+        return "<h1>Employé enregistré</h1>"
+                + "<p>Nom : " + personne.getNom() + "</p>"
+                + "<p>Âge : " + personne.getAge() + "</p>";
+    }
 }
