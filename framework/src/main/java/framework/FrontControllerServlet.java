@@ -25,8 +25,11 @@ import framework.annotations.Authorize;
 public class FrontControllerServlet extends HttpServlet {
 
     public static final String MAPPING_REGISTRY_ATTR = "mappingRegistry";
+    public static final String SESSION_MANAGER_ATTR = "sessionManager";
+    private static final long DEFAULT_SESSION_TIMEOUT_MILLIS = 30 * 60 * 1000L;
 
     private MappingRegistry registry;
+    private SessionManager sessionManager;
 
     @Override
     public void init() throws ServletException {
