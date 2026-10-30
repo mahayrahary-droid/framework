@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import framework.annotations.Authorize;
 
 @MultipartConfig
 public class FrontControllerServlet extends HttpServlet {
@@ -43,9 +44,7 @@ public class FrontControllerServlet extends HttpServlet {
                 classLoader = getClass().getClassLoader();
             }
             registry = ControllerScanner.scan(packageName, classLoader);
-            sessionManager = new SessionManager(DEFAULT_SESSION_TIMEOUT_MILLIS);
             getServletContext().setAttribute(MAPPING_REGISTRY_ATTR, registry);
-            getServletContext().setAttribute(SESSION_MANAGER_ATTR, sessionManager);
         } catch (IOException | ClassNotFoundException | RuntimeException e) {
             throw new ServletException("Failed to scan controllers in package: " + packageName, e);
         }
@@ -78,6 +77,12 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
+        if (!isAuthorized(mapping, req)) {
+            resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            resp.getWriter().write("403 Forbidden");
+            return;
+        }
+
         try {
             Object result = invoke(mapping, req, resp);
             processResult(mapping, result, req, resp);
@@ -100,6 +105,26 @@ public class FrontControllerServlet extends HttpServlet {
         Method method = mapping.getMethod();
         Object[] args = resolveArguments(method, req, resp);
         return method.invoke(controller, args);
+    }
+
+    private boolean isAuthorized(UrlMapping mapping, HttpServletRequest req) {
+        Authorize authorization = mapping.getMethod().getAnnotation(Authorize.class);
+        if (authorization == null) {
+            authorization = mapping.getControllerClass().getAnnotation(Authorize.class);
+        }
+        if (authorization == null) {
+            return true;
+        }
+
+        for (String role : authorization.value()) {
+            if (role == null || role.isBlank()) {
+                throw new IllegalStateException("Authorization role cannot be blank");
+            }
+            if (req.isUserInRole(role)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void processResult(UrlMapping mapping, Object result, HttpServletRequest req, HttpServletResponse resp)
@@ -148,8 +173,6 @@ public class FrontControllerServlet extends HttpServlet {
                 args[i] = resp;
             } else if (MappingRegistry.class.isAssignableFrom(type)) {
                 args[i] = registry;
-            } else if (Session.class.isAssignableFrom(type)) {
-                args[i] = sessionManager.getOrCreate(req, resp);
             } else if (Part.class.isAssignableFrom(type)) {
                 args[i] = resolvePart(resolveParamName(parameters[i]), req);
             } else if (type == UploadedFile.class) {

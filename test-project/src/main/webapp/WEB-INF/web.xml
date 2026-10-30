@@ -18,4 +18,8 @@
         <servlet-name>frontController</servlet-name>
         <url-pattern>/</url-pattern>
     </servlet-mapping>
+
+    <security-role>
+        <role-name>ADMIN</role-name>
+    </security-role>
 </web-app>
